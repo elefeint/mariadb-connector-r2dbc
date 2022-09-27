@@ -55,6 +55,7 @@ public final class AuthenticationFlow {
     return Flux.<State>create(
             sink -> {
               flow.sink = sink;
+              System.out.println("****** INIT flow *****");
               State.INIT.handle(flow).subscribe(sink::next, sink::error);
             })
         .doOnNext(
@@ -144,7 +145,8 @@ public final class AuthenticationFlow {
                             flow.initialHandshakePacket.getCapabilities(), flow.configuration);
                     flow.client.setContext(packet, flow.clientCapabilities);
 
-                    if (flow.configuration.getSslConfig().getSslMode() != SslMode.DISABLE) {
+                    SslMode sslMode = flow.configuration.getSslConfig().getSslMode();
+                    if (sslMode != SslMode.DISABLE && sslMode != SslMode.TUNNEL) {
                       if ((packet.getCapabilities() & Capabilities.SSL) == 0) {
                         sink.error(
                             new R2dbcNonTransientResourceException(

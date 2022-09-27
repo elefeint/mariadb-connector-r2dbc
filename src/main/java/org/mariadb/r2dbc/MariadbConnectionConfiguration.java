@@ -5,6 +5,7 @@ package org.mariadb.r2dbc;
 
 import static io.r2dbc.spi.ConnectionFactoryOptions.*;
 
+import io.netty.handler.ssl.SslContextBuilder;
 import io.r2dbc.spi.ConnectionFactoryOptions;
 import io.r2dbc.spi.IsolationLevel;
 import java.io.UnsupportedEncodingException;
@@ -12,6 +13,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
+import java.util.function.Function;
 import org.mariadb.r2dbc.util.Assert;
 import org.mariadb.r2dbc.util.HostAddress;
 import org.mariadb.r2dbc.util.SslConfig;
@@ -49,6 +51,7 @@ public final class MariadbConnectionConfiguration {
   private final boolean tinyInt1isBit;
   private final String[] restrictedAuth;
   private final LoopResources loopResources;
+  private Function<SslContextBuilder, SslContextBuilder> sslContextBuilderCustomizer;
 
   private MariadbConnectionConfiguration(
       String haMode,
@@ -83,7 +86,8 @@ public final class MariadbConnectionConfiguration {
       @Nullable CharSequence[] pamOtherPwd,
       boolean tinyInt1isBit,
       String restrictedAuth,
-      @Nullable LoopResources loopResources) {
+      @Nullable LoopResources loopResources,
+      Function<SslContextBuilder, SslContextBuilder> sslContextBuilderCustomizer) {
     this.haMode = haMode == null ? HaMode.NONE : HaMode.from(haMode);
     this.connectTimeout = connectTimeout == null ? Duration.ofSeconds(10) : connectTimeout;
     this.tcpKeepAlive = tcpKeepAlive == null ? Boolean.FALSE : tcpKeepAlive;
@@ -110,7 +114,13 @@ public final class MariadbConnectionConfiguration {
     } else {
       this.sslConfig =
           new SslConfig(
-              sslMode, serverSslCert, clientSslCert, clientSslKey, clientSslPassword, tlsProtocol);
+              sslMode,
+              serverSslCert,
+              clientSslCert,
+              clientSslKey,
+              clientSslPassword,
+              tlsProtocol,
+              sslContextBuilderCustomizer);
     }
     this.rsaPublicKey = rsaPublicKey;
     this.cachingRsaPublicKey = cachingRsaPublicKey;
@@ -121,6 +131,7 @@ public final class MariadbConnectionConfiguration {
     this.tinyInt1isBit = tinyInt1isBit;
     this.loopResources = loopResources != null ? loopResources : TcpResources.get();
     this.useServerPrepStmts = !this.allowMultiQueries && useServerPrepStmts;
+    this.sslContextBuilderCustomizer = sslContextBuilderCustomizer;
   }
 
   static boolean boolValue(Object value) {
@@ -301,6 +312,14 @@ public final class MariadbConnectionConfiguration {
           (LoopResources)
               connectionFactoryOptions.getValue(MariadbConnectionFactoryProvider.LOOP_RESOURCES);
       builder.loopResources(loopResources);
+    }
+
+    if (connectionFactoryOptions.hasOption(
+        MariadbConnectionFactoryProvider.SSL_CONTEXT_BUILDER_CUSTOMIZER)) {
+      builder.sslContextBuilderCustomizer(
+          (Function<SslContextBuilder, SslContextBuilder>)
+              connectionFactoryOptions.getValue(
+                  MariadbConnectionFactoryProvider.SSL_CONTEXT_BUILDER_CUSTOMIZER));
     }
 
     return builder;
@@ -555,6 +574,7 @@ public final class MariadbConnectionConfiguration {
     private CharSequence[] pamOtherPwd;
     private String restrictedAuth;
     @Nullable private LoopResources loopResources;
+    @Nullable private Function<SslContextBuilder, SslContextBuilder> sslContextBuilderCustomizer;
 
     private Builder() {}
 
@@ -611,7 +631,8 @@ public final class MariadbConnectionConfiguration {
           this.pamOtherPwd,
           this.tinyInt1isBit,
           this.restrictedAuth,
-          this.loopResources);
+          this.loopResources,
+          this.sslContextBuilderCustomizer);
     }
 
     /**
@@ -937,6 +958,12 @@ public final class MariadbConnectionConfiguration {
 
     public Builder loopResources(LoopResources loopResources) {
       this.loopResources = Assert.requireNonNull(loopResources, "loopResources must not be null");
+      return this;
+    }
+
+    public Builder sslContextBuilderCustomizer(
+        Function<SslContextBuilder, SslContextBuilder> sslContextBuilderCustomizer) {
+      this.sslContextBuilderCustomizer = sslContextBuilderCustomizer;
       return this;
     }
 

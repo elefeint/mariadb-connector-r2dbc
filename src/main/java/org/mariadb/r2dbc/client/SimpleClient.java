@@ -96,6 +96,26 @@ public class SimpleClient implements Client {
         new ServerMessageSubscriber(this.lock, this.isClosed, exchangeQueue, receiverQueue);
     connection.addHandler(new MariadbFrameDecoder());
 
+    if (this.configuration.getSslConfig().getSslMode() == SslMode.TUNNEL) {
+      System.out.println("****** TCP connection established *****");
+      CompletableFuture<Void> result = new CompletableFuture<>();
+      try {
+        System.out.println("****** ADDING SSL config for tunneling *****");
+        SSLEngine engine =
+            configuration
+                .getSslConfig()
+                .getSslContext()
+                .newEngine(this.connection.channel().alloc());
+        final SslHandler sslHandler = new SslHandler(engine);
+
+        this.connection.addHandlerFirst(sslHandler);
+
+        System.out.println("****** ADDED SSL config for tunneling *****");
+      } catch (SSLException e) {
+        handleConnectionError(e);
+      }
+    }
+
     if (logger.isTraceEnabled()) {
       connection.addHandlerFirst(
           LoggingHandler.class.getSimpleName(),
